@@ -24,18 +24,18 @@ else:
 print(f"🔑 Google API Key Source: {api_key_source}") # Console log
 
 GOOGLE_MODELS = {
-    "small": "gemini-1.5-flash-latest",
-    "medium": "gemini-1.5-flash-latest",
-    "large": "gemini-1.5-pro-latest",
+    "small": "gemma-3-27b-it",
+    "medium": "gemini-2.0-flash",
+    "large": "gemini-2.5-pro-exp-03-25",
 }
 
 # LM Studio Settings
-LM_STUDIO_URL = "http://localhost:1234/v1"
+LM_STUDIO_URL = "http://localhost:1235/v1/chat/completions"
 LM_STUDIO_HEADERS = {'Content-Type': 'application/json'}
 LM_STUDIO_MODELS = {
-    "small": "meta-llama/Meta-Llama-3.1-8B-Instruct", # Replace with your models
-    "medium": "meta-llama/Meta-Llama-3.1-8B-Instruct",
-    "large": "meta-llama/Meta-Llama-3.1-8B-Instruct",
+    "small": "meta-llama-3.1-8b-instruct", 
+    "medium": "meta-llama-3.1-8b-instruct",
+    "large": "meta-llama-3.1-8b-instruct",
 }
 
 # OCR Settings
