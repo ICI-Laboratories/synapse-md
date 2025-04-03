@@ -35,7 +35,7 @@ LM_STUDIO_HEADERS = {'Content-Type': 'application/json'}
 LM_STUDIO_MODELS = {
     "small": "meta-llama/Meta-Llama-3.1-8B-Instruct", # Replace with your models
     "medium": "meta-llama/Meta-Llama-3.1-8B-Instruct",
-    "large": "meta-llama/Meta-Llama-3.1-70B-Instruct",
+    "large": "meta-llama/Meta-Llama-3.1-8B-Instruct",
 }
 
 # OCR Settings
