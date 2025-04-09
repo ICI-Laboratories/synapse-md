@@ -92,7 +92,7 @@ class GoogleAIClient(LLMInterface):
 class LMStudioClient(LLMInterface):
     def __init__(self, model_tier: str = "small"):
         super().__init__(model_tier)
-        self.api_url = f"{LM_STUDIO_URL}/chat/completions"
+        self.api_url = f"{LM_STUDIO_URL}"
         print(f"✅ LM Studio client configured for model: {self.model_name} at {self.api_url}")
 
     def _get_model_name(self, tier: str) -> str: return LM_STUDIO_MODELS.get(tier, LM_STUDIO_MODELS["small"])

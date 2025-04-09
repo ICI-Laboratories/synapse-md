@@ -30,7 +30,7 @@ GOOGLE_MODELS = {
 }
 
 # LM Studio Settings
-LM_STUDIO_URL = "http://localhost:1235/v1/chat/completions"
+LM_STUDIO_URL = "http://localhost:8080/lmstudio"
 LM_STUDIO_HEADERS = {'Content-Type': 'application/json'}
 LM_STUDIO_MODELS = {
     "small": "meta-llama-3.1-8b-instruct", 
