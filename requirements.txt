@@ -1,0 +1,7 @@
+streamlit>=1.42,<2
+requests>=2.32,<3
+cryptography>=42,<47
+google-generativeai>=0.8,<1
+PyMuPDF>=1.24,<2
+easyocr>=1.7,<2
+Pillow>=10,<13

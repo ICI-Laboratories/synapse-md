@@ -26,7 +26,7 @@ def get_ocr_reader():
         return reader
     except Exception as e:
         st.error(f"Failed to initialize EasyOCR: {e}. OCR on images will fail.")
-        logging.error(f"Failed to initialize EasyOCR: {e}")
+        logging.error("Failed to initialize EasyOCR.")
         return None
 
 
@@ -45,8 +45,8 @@ def extract_text_from_pdf_page(page: fitz.Page, reader: easyocr.Reader | None) -
             if len(ocr_text) > len(text) + 20 or (not text and ocr_text):
                 logging.info(f"Page {page.number + 1}: Used OCR.")
                 return ocr_text
-        except Exception as ocr_e:
-            logging.error(f"OCR failed for page {page.number + 1}: {ocr_e}")
+        except Exception:
+            logging.error("OCR failed for page %d.", page.number + 1)
     return text
 
 
@@ -103,9 +103,7 @@ def summarize_page(page_num: int, page_text: str, context_name: str) -> dict:
         input_text_for_summary, max_length=50, temperature=0.3
     )
     if "error" in summary_text.lower() or len(summary_text) < 10:
-        logging.warning(
-            f"Page {page_num}: Failed to get meaningful summary. Raw: {summary_text}"
-        )
+        logging.warning("Page %d did not produce a meaningful summary.", page_num)
         summary_text = f"Content related to page {page_num} of {context_name}."
     return {"page": page_num, "summary": summary_text.strip()}
 

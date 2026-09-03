@@ -4,6 +4,10 @@ import time
 import logging
 import re
 
+st.set_page_config(
+    page_title="SynapseMD", layout="wide", initial_sidebar_state="expanded"
+)
+
 try:
     import auth_helpers as auth
 except ImportError:
@@ -21,9 +25,9 @@ logging.info("SynapseMD: Verificando estado de autenticación...")
 user_info = auth.ensure_authenticated(
     login_title="Bienvenido a SynapseMD",
     login_message="Tu asistente médico inteligente para documentos.",
-    login_button_text="Iniciar sesión con tu cuenta de Google",
+    login_button_text="Iniciar sesión con SARA",
 )
-logging.info(f"SynapseMD: Usuario autenticado: {user_info.get('email')}")
+logging.info("SynapseMD: Sesión central validada.")
 
 from config import (
     APP_NAME,
@@ -35,10 +39,6 @@ import storage
 import context_processing
 import editor_features
 from llm_interface import get_llm_client
-
-st.set_page_config(
-    page_title=APP_NAME, layout="wide", initial_sidebar_state="expanded"
-)
 
 default_session_state_app = {
     "current_draft_name": None,
@@ -54,45 +54,25 @@ for key, default_value in default_session_state_app.items():
     if key not in st.session_state:
         st.session_state[key] = default_value
 
-user_email = user_info.get("email")
-if not user_email:
-    user_name_fallback = user_info.get(
-        "name", f"unknown_synapse_user_{int(time.time())}"
-    )
-    user_email = f"user_{user_name_fallback.replace(' ', '_')}"
-    st.warning(
-        f"Email no encontrado para el usuario, usando identificador alternativo: {user_email}",
-        icon="⚠️",
-    )
-    logging.warning(
-        f"SynapseMD: Email not found for user '{user_name_fallback}', "
-        f"using fallback identifier: {user_email}"
-    )
-
-user_folder_id = "".join(
-    c for c in user_email if c.isalnum() or c in ("_", "-", "@", ".")
-).rstrip(".").strip()
-user_folder_id = user_folder_id or "default_synapse_user"
-logging.info(f"SynapseMD: User folder identifier set to: {user_folder_id}")
+try:
+    user_folder_id = auth.get_user_namespace(user_info)
+except auth.AuthError:
+    logging.error("SynapseMD: Namespace configuration rejected.")
+    st.error("No se pudo abrir el espacio de trabajo de esta cuenta.")
+    st.stop()
 
 user_folder = storage.get_user_dir_path(user_folder_id)
 try:
     os.makedirs(user_folder, exist_ok=True)
     os.makedirs(os.path.join(user_folder, storage.DRAFTS_FOLDER), exist_ok=True)
     os.makedirs(os.path.join(user_folder, storage.CONTEXT_FOLDER), exist_ok=True)
-    logging.info(f"SynapseMD: User folder structure ensured at: {user_folder}")
-except OSError as e:
-    st.error(
-        f"Error Crítico: No se pudo crear la estructura de directorios del usuario en {user_folder}. "
-        f"Error: {e}"
-    )
-    logging.error(
-        f"SynapseMD: Failed to create user directory structure at {user_folder}. "
-        f"Error: {e}"
-    )
+    logging.info("SynapseMD: User workspace ready.")
+except OSError:
+    st.error("No se pudo crear la estructura de directorios del usuario.")
+    logging.error("SynapseMD: User workspace initialization failed.")
     st.stop()
 
-auth.display_auth_status_sidebar(app_name=APP_NAME)
+auth.display_auth_status_sidebar(app_name=APP_NAME, user_info=user_info)
 is_google_key_valid = validate_google_api_key()
 
 
@@ -111,15 +91,11 @@ def load_draft_into_editor(draft_name):
         if f"_{editor_key}_prev" in st.session_state:
             del st.session_state[f"_{editor_key}_prev"]
         st.success(f"Borrador cargado: {draft_name}")
-        logging.info(
-            f"SynapseMD: Loaded draft '{draft_name}' for user '{user_folder_id}'"
-        )
+        logging.info("SynapseMD: Draft loaded.")
         st.rerun()
     else:
         st.error(f"Fallo al cargar borrador: {draft_name}")
-        logging.error(
-            f"SynapseMD: Failed to load draft '{draft_name}' for user '{user_folder_id}'"
-        )
+        logging.error("SynapseMD: Draft loading failed.")
 
 
 def save_current_draft():
@@ -133,19 +109,13 @@ def save_current_draft():
             st.toast(
                 f"Borrador '{st.session_state.current_draft_name}' guardado.", icon="💾"
             )
-            logging.info(
-                f"SynapseMD: Saved draft '{st.session_state.current_draft_name}' for user '{user_folder_id}'"
-            )
+            logging.info("SynapseMD: Draft saved.")
         except Exception as e:
             st.error(f"Error guardando borrador: {e}")
-            logging.error(
-                f"SynapseMD: Error saving draft '{st.session_state.current_draft_name}' for user '{user_folder_id}': {e}"
-            )
+            logging.error("SynapseMD: Draft saving failed.")
     else:
         st.warning("No se puede guardar, no hay nombre de borrador. Usa 'Guardar Como'.")
-        logging.warning(
-            f"SynapseMD: Save attempt failed for user '{user_folder_id}', no draft name set."
-        )
+        logging.warning("SynapseMD: Draft save rejected because its name is missing.")
 
 
 def clear_editor():
@@ -156,7 +126,7 @@ def clear_editor():
     editor_key_base = "editor_area_new_draft"
     if f"_{editor_key_base}_prev" in st.session_state:
         del st.session_state[f"_{editor_key_base}_prev"]
-    logging.info(f"SynapseMD: Editor cleared for user '{user_folder_id}'")
+    logging.info("SynapseMD: Editor cleared.")
     st.rerun()
 
 
@@ -166,20 +136,14 @@ def delete_current_draft():
         try:
             storage.delete_draft(user_folder_id, draft_to_delete)
             st.success(f"Borrador eliminado: {draft_to_delete}")
-            logging.info(
-                f"SynapseMD: Deleted draft '{draft_to_delete}' for user '{user_folder_id}'"
-            )
+            logging.info("SynapseMD: Draft deleted.")
             clear_editor()
         except Exception as e:
             st.error(f"No se pudo eliminar el borrador: {e}")
-            logging.error(
-                f"SynapseMD: Failed to delete draft '{draft_to_delete}' for user '{user_folder_id}': {e}"
-            )
+            logging.error("SynapseMD: Draft deletion failed.")
     else:
         st.warning("No hay borrador seleccionado para eliminar.")
-        logging.warning(
-            f"SynapseMD: Delete draft attempt failed for user '{user_folder_id}', no draft selected."
-        )
+        logging.warning("SynapseMD: Draft deletion rejected because no draft is selected.")
 
 
 with st.sidebar:
@@ -191,18 +155,12 @@ with st.sidebar:
             or st.session_state.llm_backend not in backend_options
         ):
             st.session_state.llm_backend = ACTIVE_LLM_BACKEND
-            logging.warning(
-                f"SynapseMD: Resetting LLM backend to default '{ACTIVE_LLM_BACKEND}' "
-                f"due to invalid state for user '{user_folder_id}'."
-            )
+            logging.warning("SynapseMD: Invalid LLM state reset to the configured default.")
         current_backend_index = backend_options.index(st.session_state.llm_backend)
     except ValueError:
         current_backend_index = 0
         st.session_state.llm_backend = backend_options[current_backend_index]
-        logging.warning(
-            f"SynapseMD: Invalid LLM backend '{st.session_state.llm_backend}' in session state for user '{user_folder_id}'. "
-            f"Defaulting to '{backend_options[current_backend_index]}'."
-        )
+        logging.warning("SynapseMD: Unknown LLM backend reset to the configured default.")
     new_backend = st.selectbox(
         "Selecciona Backend LLM",
         options=backend_options,
@@ -214,15 +172,11 @@ with st.sidebar:
         st.session_state.llm_backend = new_backend
         try:
             get_llm_client.clear()
-            logging.info(
-                f"SynapseMD: Cleared LLM client cache for user '{user_folder_id}'."
-            )
-        except Exception as e:
-            logging.error(f"SynapseMD: Could not clear LLM client cache: {e}")
+            logging.info("SynapseMD: LLM client cache cleared.")
+        except Exception:
+            logging.error("SynapseMD: LLM client cache clear failed.")
         st.success(f"Backend LLM cambiado a: {new_backend.upper()}.")
-        logging.info(
-            f"SynapseMD: LLM backend changed to '{new_backend}' for user '{user_folder_id}'"
-        )
+        logging.info("SynapseMD: LLM backend changed.")
         st.rerun()
     st.caption(f"Usando: {st.session_state.llm_backend.upper()}")
     st.divider()
@@ -299,18 +253,13 @@ with st.sidebar:
                         clean_name += ".md"
                     st.session_state.current_draft_name = clean_name
                     save_current_draft()
-                    logging.info(
-                        f"SynapseMD: Draft saved/renamed as '{clean_name}' for user '{user_folder_id}'"
-                    )
+                    logging.info("SynapseMD: Draft saved or renamed.")
                     st.rerun()
                 else:
                     st.warning(
                         "Nombre de borrador inválido. Evita solo puntos o caracteres especiales."
                     )
-                    logging.warning(
-                        f"SynapseMD: Invalid draft name after cleaning for user '{user_folder_id}': "
-                        f"'{new_draft_name_input}' -> '{clean_name}'"
-                    )
+                    logging.warning("SynapseMD: Invalid draft name rejected.")
             else:
                 st.warning("Por favor, introduce un nombre.")
     if st.session_state.get("current_draft_name"):
@@ -356,9 +305,7 @@ with tab1:
                     "Generar Borrador", type="primary"
                 )
                 if submitted_generate and draft_prompt.strip():
-                    logging.info(
-                        f"SynapseMD: Draft generation requested by user '{user_folder_id}' with prompt: '{draft_prompt[:50]}...'"
-                    )
+                    logging.info("SynapseMD: Draft generation requested.")
                     with st.spinner("🤖 Generando borrador inicial..."):
                         generated_content = editor_features.generate_initial_draft(
                             user_folder_id, draft_prompt, selected_context_draft
@@ -384,24 +331,16 @@ with tab1:
                             editor_key = f"editor_area_{editor_key_base}"
                             if f"_{editor_key}_prev" in st.session_state:
                                 del st.session_state[f"_{editor_key}_prev"]
-                            logging.info(
-                                f"SynapseMD: Initial draft generated successfully for user '{user_folder_id}'. "
-                                f"Assigned name: {st.session_state.current_draft_name}"
-                            )
+                            logging.info("SynapseMD: Initial draft generated.")
                             st.rerun()
                         elif generated_content:
                             st.error(f"Fallo en generación de borrador: {generated_content}")
-                            logging.error(
-                                f"SynapseMD: Draft generation failed for user '{user_folder_id}'. "
-                                f"Response: {generated_content}"
-                            )
+                            logging.error("SynapseMD: Draft generation failed.")
                         else:
                             st.error(
                                 "Fallo en generación de borrador (respuesta vacía)."
                             )
-                            logging.error(
-                                f"SynapseMD: Draft generation failed for user '{user_folder_id}' (empty response)."
-                            )
+                            logging.error("SynapseMD: Draft generation returned an empty response.")
                 elif submitted_generate:
                     st.warning("Por favor, introduce instrucciones.")
         st.divider()
@@ -434,24 +373,17 @@ with tab1:
                 key="get_suggestion_btn",
                 help="Obtener una sugerencia de la IA para continuar el texto.",
             ):
-                logging.info(
-                    f"SynapseMD: Inline suggestion requested by user '{user_folder_id}'"
-                )
+                logging.info("SynapseMD: Inline suggestion requested.")
                 with st.spinner("🤔 Pensando..."):
                     suggestion = editor_features.get_inline_suggestion(
                         st.session_state.draft_content
                     )
                     if suggestion and "error" not in suggestion.lower():
                         st.session_state.inline_suggestion = suggestion
-                        logging.info(
-                            f"SynapseMD: Inline suggestion generated: '{suggestion[:50]}...'"
-                        )
+                        logging.info("SynapseMD: Inline suggestion generated.")
                     else:
                         st.warning(f"No se pudo obtener sugerencia: {suggestion}")
-                        logging.warning(
-                            f"SynapseMD: Failed to get inline suggestion for user '{user_folder_id}'. "
-                            f"Response: {suggestion}"
-                        )
+                        logging.warning("SynapseMD: Inline suggestion failed.")
                     st.rerun()
         if st.session_state.inline_suggestion:
             suggestion_text = st.session_state.inline_suggestion
@@ -465,9 +397,7 @@ with tab1:
                 st.session_state.draft_content += suggestion_text
                 st.session_state.inline_suggestion = ""
                 st.session_state[prev_content_key] = st.session_state.draft_content
-                logging.info(
-                    f"SynapseMD: Inline suggestion accepted by user '{user_folder_id}'."
-                )
+                logging.info("SynapseMD: Inline suggestion accepted.")
                 st.rerun()
     with suggestion_col:
         st.subheader("💡 Sugerencias IA")
@@ -481,10 +411,7 @@ with tab1:
         )
         if selected_context_editor != st.session_state.selected_context:
             st.session_state.selected_context = selected_context_editor
-            logging.info(
-                f"SynapseMD: Editor context selection changed for user '{user_folder_id}'. "
-                f"Selected: {selected_context_editor}"
-            )
+            logging.info("SynapseMD: Editor context selection changed.")
             st.rerun()
         if st.button(
             "Generar Sugerencias de Sección",
@@ -498,9 +425,7 @@ with tab1:
             ):
                 st.warning("Escribe algo o selecciona fuentes de contexto primero.")
             else:
-                logging.info(
-                    f"SynapseMD: Sidebar suggestions requested by user '{user_folder_id}'."
-                )
+                logging.info("SynapseMD: Sidebar suggestions requested.")
                 with st.spinner("🧠 Generando sugerencias..."):
                     suggestions = editor_features.get_sidebar_suggestions(
                         user_folder_id,
@@ -516,14 +441,11 @@ with tab1:
                         st.warning(
                             "Algunas sugerencias no pudieron ser generadas correctamente."
                         )
-                        logging.warning(
-                            f"SynapseMD: Received invalid suggestions for user '{user_folder_id}'. "
-                            f"Raw: {suggestions}"
-                        )
+                        logging.warning("SynapseMD: Invalid suggestions were discarded.")
                     st.session_state.sidebar_suggestions = valid_suggestions
                     logging.info(
-                        f"SynapseMD: Sidebar suggestions generated/updated for user '{user_folder_id}'. "
-                        f"Count: {len(valid_suggestions)}"
+                        "SynapseMD: Sidebar suggestions updated; count=%d.",
+                        len(valid_suggestions),
                     )
         st.markdown("---")
         if not st.session_state.sidebar_suggestions:
@@ -550,9 +472,7 @@ with tab1:
                             st.session_state[prev_content_key] = (
                                 st.session_state.draft_content
                             )
-                            logging.info(
-                                f"SynapseMD: Sidebar suggestion '{title}' appended by user '{user_folder_id}'."
-                            )
+                            logging.info("SynapseMD: Sidebar suggestion appended.")
                             st.rerun()
 
 with tab2:
@@ -577,8 +497,8 @@ with tab2:
                 status_message = st.empty()
                 total_files = len(uploaded_pdfs)
                 logging.info(
-                    f"SynapseMD: PDF upload initiated by user '{user_folder_id}'. "
-                    f"Files: {total_files}"
+                    "SynapseMD: PDF processing batch started; count=%d.",
+                    total_files,
                 )
                 for i, pdf_file in enumerate(uploaded_pdfs):
                     safe_display_name = pdf_file.name.encode(
@@ -597,21 +517,14 @@ with tab2:
                         )
                         if context_id:
                             processed_count += 1
-                            logging.info(
-                                f"SynapseMD: Successfully processed PDF '{pdf_file.name}' -> '{context_id}' for user '{user_folder_id}'"
-                            )
+                            logging.info("SynapseMD: PDF processed.")
                         else:
                             error_files.append(safe_display_name)
-                            logging.warning(
-                                f"SynapseMD: PDF processing returned no context ID for '{pdf_file.name}', user '{user_folder_id}'"
-                            )
+                            logging.warning("SynapseMD: PDF processing returned no context.")
                     except Exception as e:
                         st.error(f"Error procesando {safe_display_name}: {e}")
                         error_files.append(safe_display_name)
-                        logging.error(
-                            f"SynapseMD: Error processing PDF '{pdf_file.name}' for user '{user_folder_id}': {e}",
-                            exc_info=True,
-                        )
+                        logging.error("SynapseMD: PDF processing failed.")
                     progress_bar.progress(
                         (i + 1) / total_files,
                         text=progress_text.replace("Procesando", "Procesado"),
@@ -650,25 +563,18 @@ with tab2:
                 and text_context_name.strip()
                 and text_context_content.strip()
             ):
-                logging.info(
-                    f"SynapseMD: Text context submission by user '{user_folder_id}'. "
-                    f"Name: '{text_context_name}'"
-                )
+                logging.info("SynapseMD: Text context submission received.")
                 with st.spinner("Guardando contexto de texto..."):
                     context_id = context_processing.process_text_context(
                         user_folder_id, text_context_content, text_context_name
                     )
                     if context_id:
                         st.success(f"Contexto de texto '{context_id}' guardado.")
-                        logging.info(
-                            f"SynapseMD: Text context '{context_id}' saved successfully for user '{user_folder_id}'."
-                        )
+                        logging.info("SynapseMD: Text context saved.")
                         st.rerun()
                     else:
                         st.error("Fallo al guardar contexto de texto.")
-                        logging.error(
-                            f"SynapseMD: Failed to save text context '{text_context_name}' for user '{user_folder_id}'."
-                        )
+                        logging.error("SynapseMD: Text context save failed.")
             elif submitted_text_context:
                 st.warning("Por favor, introduce nombre y contenido para el contexto.")
     with col2:
@@ -759,18 +665,14 @@ with tab2:
                             help=f"Eliminar todos los datos relacionados con '{context_name}'",
                         ):
                             try:
-                                logging.warning(
-                                    f"SynapseMD: Deletion requested for context '{context_name}' by user '{user_folder_id}'."
-                                )
+                                logging.warning("SynapseMD: Context deletion requested.")
                                 storage.delete_context_source(
                                     user_folder_id, context_name
                                 )
                                 st.success(
                                     f"Fuente de contexto eliminada: {context_name}"
                                 )
-                                logging.info(
-                                    f"SynapseMD: Deleted context source '{context_name}' for user '{user_folder_id}'."
-                                )
+                                logging.info("SynapseMD: Context source deleted.")
                                 if context_name in st.session_state.selected_context:
                                     st.session_state.selected_context = [
                                         ctx
@@ -780,9 +682,7 @@ with tab2:
                                 st.rerun()
                             except Exception as e:
                                 st.error(f"No se pudo eliminar '{context_name}': {e}")
-                                logging.error(
-                                    f"SynapseMD: Failed to delete context source '{context_name}' for user '{user_folder_id}': {e}"
-                                )
+                                logging.error("SynapseMD: Context source deletion failed.")
 
 st.divider()
 user_display_footer = user_info.get("email", "Usuario Desconocido")

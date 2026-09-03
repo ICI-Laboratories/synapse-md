@@ -52,4 +52,4 @@ def validate_google_api_key():
     return True
 
 if not os.path.exists(BASE_STORAGE_PATH):
-    logging.warning(f"Base storage path '{BASE_STORAGE_PATH}' does not exist.")
+    logging.warning("Configured base storage path does not exist.")

@@ -1,7 +1,9 @@
-import os
 import json
-import shutil
 import logging
+import os
+import re
+import shutil
+
 from config import BASE_STORAGE_PATH
 
 DRAFTS_FOLDER = "drafts"
@@ -9,14 +11,21 @@ CONTEXT_FOLDER = "context_sources"
 ORIGINAL_PDF_SUBFOLDER = "_originals"
 EXTRACTED_TEXT_SUBFOLDER = "_extracted_text"
 SUMMARY_SUBFOLDER = "_summaries"
+_NAMESPACE_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9@._-]{0,254}$")
 
 
 def get_user_dir_path(user_identifier: str) -> str:
-    safe_identifier = "".join(
-        c for c in user_identifier if c.isalnum() or c in ("_", "-", "@", ".")
-    ).rstrip()
-    safe_identifier = safe_identifier or "default_user"
-    return os.path.join(BASE_STORAGE_PATH, safe_identifier)
+    if (
+        not isinstance(user_identifier, str)
+        or user_identifier in {".", ".."}
+        or _NAMESPACE_PATTERN.fullmatch(user_identifier) is None
+    ):
+        raise ValueError("invalid_user_namespace")
+    base_path = os.path.abspath(BASE_STORAGE_PATH)
+    user_path = os.path.abspath(os.path.join(base_path, user_identifier))
+    if os.path.commonpath((base_path, user_path)) != base_path or user_path == base_path:
+        raise ValueError("invalid_user_namespace")
+    return user_path
 
 
 def get_drafts_dir(user_identifier: str) -> str:
@@ -110,8 +119,8 @@ def list_drafts(user_identifier: str) -> list[str]:
             return sorted(
                 [f for f in os.listdir(drafts_dir) if f.lower().endswith(".md")]
             )
-    except OSError as e:
-        logging.error(f"Error listing drafts in {drafts_dir}: {e}")
+    except OSError:
+        logging.error("Draft listing failed.")
     return []
 
 
@@ -122,8 +131,8 @@ def load_draft(user_identifier: str, draft_name: str) -> str | None:
         if os.path.isfile(file_path):
             with open(file_path, "r", encoding="utf-8") as f:
                 return f.read()
-    except OSError as e:
-        logging.error(f"Error loading draft {file_path}: {e}")
+    except OSError:
+        logging.error("Draft loading failed.")
     return None
 
 
@@ -139,8 +148,8 @@ def list_context_sources(user_identifier: str) -> list[str]:
                 elif os.path.isfile(item_path) and item.lower().endswith(".txt"):
                     sources.append(item)
             return sorted(sources)
-    except OSError as e:
-        logging.error(f"Error listing context sources in {context_dir}: {e}")
+    except OSError:
+        logging.error("Context source listing failed.")
     return []
 
 
@@ -153,8 +162,8 @@ def load_summary(user_identifier: str, context_name: str) -> dict | None:
         if os.path.isfile(file_path):
             with open(file_path, "r", encoding="utf-8") as f:
                 return json.load(f)
-    except (OSError, json.JSONDecodeError) as e:
-        logging.error(f"Error loading summary {file_path}: {e}")
+    except (OSError, json.JSONDecodeError):
+        logging.error("Summary loading failed.")
     return None
 
 
@@ -167,8 +176,8 @@ def load_extracted_text(user_identifier: str, context_name: str) -> str | None:
         if os.path.isfile(file_path):
             with open(file_path, "r", encoding="utf-8") as f:
                 return f.read()
-    except OSError as e:
-        logging.error(f"Error loading extracted text {file_path}: {e}")
+    except OSError:
+        logging.error("Extracted text loading failed.")
     return None
 
 
@@ -179,8 +188,8 @@ def load_text_context(user_identifier: str, context_filename: str) -> str | None
         if os.path.isfile(file_path) and context_filename.lower().endswith(".txt"):
             with open(file_path, "r", encoding="utf-8") as f:
                 return f.read()
-    except OSError as e:
-        logging.error(f"Error loading text context {file_path}: {e}")
+    except OSError:
+        logging.error("Text context loading failed.")
     return None
 
 
@@ -190,8 +199,8 @@ def delete_draft(user_identifier: str, draft_name: str):
     try:
         if os.path.isfile(file_path):
             os.remove(file_path)
-    except OSError as e:
-        logging.error(f"Error deleting draft {file_path}: {e}")
+    except OSError:
+        logging.error("Draft deletion failed.")
 
 
 def delete_context_source(user_identifier: str, context_name: str):
@@ -202,5 +211,5 @@ def delete_context_source(user_identifier: str, context_name: str):
             shutil.rmtree(path_to_delete)
         elif os.path.isfile(path_to_delete):
             os.remove(path_to_delete)
-    except OSError as e:
-        logging.error(f"Error deleting context {path_to_delete}: {e}")
+    except OSError:
+        logging.error("Context deletion failed.")

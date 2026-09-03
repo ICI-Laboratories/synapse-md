@@ -73,7 +73,7 @@ class GoogleAIClient(LLMInterface):
                 st.error(
                     f"Failed to initialize Google AI client with provided key: {e}"
                 )
-                logging.error(f"Failed to initialize Google AI client: {e}")
+                logging.error("Failed to initialize Google AI client.")
 
     def _get_model_name(self, tier: str) -> str:
         return GOOGLE_MODELS.get(tier, GOOGLE_MODELS["small"])
@@ -100,7 +100,7 @@ class GoogleAIClient(LLMInterface):
             return "Error: Received an empty or unexpected response from Google AI."
         except Exception as e:
             st.error(f"Google AI API Error: {e}")
-            logging.error(f"Google AI API Error: {e}")
+            logging.error("Google AI API request failed.")
             return f"Error: Google AI API call failed. {e}"
 
     def generate_json(
@@ -151,7 +151,7 @@ class GoogleAIClient(LLMInterface):
             }
         except Exception as e:
             st.error(f"Google AI API JSON Error: {e}")
-            logging.error(f"Google AI API JSON Error: {e}")
+            logging.error("Google AI API JSON request failed.")
             return {"error": f"Google AI API call failed: {str(e)}"}
 
 
@@ -159,9 +159,7 @@ class LMStudioClient(LLMInterface):
     def __init__(self, model_tier: str = "small"):
         super().__init__(model_tier)
         self.api_url = f"{LM_STUDIO_URL}"
-        logging.info(
-            f"LM Studio client configured for model: {self.model_name} at {self.api_url}"
-        )
+        logging.info("LM Studio client configured.")
 
     def _get_model_name(self, tier: str) -> str:
         return LM_STUDIO_MODELS.get(tier, LM_STUDIO_MODELS["small"])
@@ -177,11 +175,11 @@ class LMStudioClient(LLMInterface):
             st.error(
                 f"LM Studio connection error: {e}. Is it running at {self.api_url}?"
             )
-            logging.error(f"LM Studio connection error: {e}")
+            logging.error("LM Studio connection failed.")
             return {"error": f"LM Studio connection failed: {e}"}
         except Exception as e:
             st.error(f"Error during LM Studio call: {e}")
-            logging.error(f"Error during LM Studio call: {e}")
+            logging.error("LM Studio request failed.")
             return {"error": f"An unexpected error occurred: {e}"}
 
     def generate_text(
@@ -200,7 +198,7 @@ class LMStudioClient(LLMInterface):
         try:
             return result["choices"][0]["message"]["content"].strip()
         except (IndexError, KeyError, TypeError):
-            logging.error(f"Unexpected LM Studio response format: {result}")
+            logging.error("Unexpected LM Studio response format.")
             return "Error: Unexpected response format from LM Studio."
 
     def generate_json(
@@ -233,7 +231,7 @@ class LMStudioClient(LLMInterface):
                 content = content.strip()[3:-3].strip()
             return json.loads(content)
         except (IndexError, KeyError, TypeError):
-            logging.error(f"Unexpected LM Studio JSON response format: {result}")
+            logging.error("Unexpected LM Studio JSON response format.")
             return {"error": "Unexpected JSON response format from LM Studio."}
         except json.JSONDecodeError as json_e:
             return {
